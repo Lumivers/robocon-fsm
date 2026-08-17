@@ -5,9 +5,9 @@
 
 写在前面：
 
-个人在2026rc中关于决策节点的开发吃了不少亏，包括但不限于：开局不知道写什么，中期和电控交流不够导致一堆屎山，后期快上场了还在改流程。所以我把今年的代码去除2026赛题相关之后，抽象成了一个决策框架，供各位取用。
+个人在2026rc中关于决策节点的开发吃了不少亏，包括但不限于：开局不知道写什么，中期和电控交流不够导致一堆屎山，后期快上场了还在改流程。所以我把今年的代码去除2026赛题相关之后，抽象成了一个决策框架，供各位取用。然后也是希望各位品鉴完之后有什么可以改进的地方可以提出来，我深知我的个人能力肯定是不够的，也请各位不吝赐教。个人QQ：2423109915。
 
-推荐阅读：[RC上位机：从入门到入土](https://lumivers.feishu.cn/wiki/I0S2wsP9DiUsGdkp1kkc9s48ngb)
+推荐阅读个人文章：[RC上位机：从入门到入土](https://lumivers.feishu.cn/wiki/I0S2wsP9DiUsGdkp1kkc9s48ngb)
 
 ---
 
@@ -54,22 +54,22 @@ async def my_robot_mission(fsm: FSM, act: ActionDispatcher, bb: Blackboard):
 
 ```
 robocon-fsm/
-├── src/                         # 【ROS 2 工作空间源码目录 (colcon build 一键编译)】
+├── src/                         # 【ROS2工作空间源码目录(colcon build一键编译)】
 │   ├── robocon_fsm/             #   ├─ 核心决策框架 (Python / ament_python / 可独立 pip 安装)
 │   │   ├── core/                #   │   └─ 异步状态机调度引擎 (FSM, Event, ActionBase, Blackboard)
-│   │   ├── ros2/                #   │   └─ ROS 2 原生双线程桥接器与动作辅助
+│   │   ├── ros2/                #   │   └─ ROS2原生双线程桥接器与动作辅助
 │   │   └── mock/                #   │   └─ 离线虚拟仿真与单测工具
 │   └── robot_serial/            #   └─ 通用下位机串口通信驱动包 (C++ / ament_cmake)
-│       ├── include/robot_serial/#       └─ CRC16 校验、对齐协议包结构体、驱动节点头文件
-│       ├── msg/                 #       └─ 通用 Command.msg / Ack.msg 接口
-│       └── src/                 #       └─ 50Hz 定时发送与接收解析实现
+│       ├── include/robot_serial/#       └─ CRC16校验、对齐协议包结构体、驱动节点头文件
+│       ├── msg/                 #       └─ 通用Command.msg / Ack.msg接口
+│       └── src/                 #       └─ 50Hz定时发送与接收解析实现
 │
 ├── templates/                   # 【开箱即用开发模板】
 │   └── standard_robot/          # 新队伍直接拷贝此目录即可开始新赛题开发
 │       ├── config/params.yaml   # 场地坐标与参数
-│       ├── my_actions.py        # 本车硬件接口实现 (继承ActionDispatcher)
+│       ├── my_actions.py        # 本车硬件接口实现(继承ActionDispatcher)
 │       ├── my_decision.py       # 线性全场决策流
-│       └── main_node.py         # ROS 2 节点入口 (继承Ros2DecisionNodeBase)
+│       └── main_node.py         # ROS 2 节点入口(继承Ros2DecisionNodeBase)
 │
 ├── examples/                    # 【教学与参考示例】
 │   ├── 01_pure_python_fsm/      # 上手Demo(无 ROS 依赖)
@@ -83,12 +83,12 @@ robocon-fsm/
 
 ## 快速上手
 
-### 1. 体验 50 行极简状态机 (无需 ROS 2)
+### 1. 体验状态机(无需 ROS 2)
 ```bash
 python examples/01_pure_python_fsm/main.py
 ```
 
-### 2. 运行离线全场决策仿真 (带自动重发与事件竞态)
+### 2. 运行离线全场决策仿真(带自动重发与事件竞态)
 ```bash
 python examples/02_mock_robot_mission/test_mission.py
 ```
@@ -117,7 +117,7 @@ python tests/run_all_tests.py
 | `await fsm.wait(seconds)` | 异步非阻塞延时等待 |
 | `await fsm.wait_event("NAME", timeout=...)` | 等待指定事件到达，支持超时 |
 | `await fsm.wait_event(lambda e: ...)` | 谓词匹配：按事件内容/指令码过滤 |
-| `await fsm.wait_any("A", "B", timeout=...)` | 等待任意一个事件到达 (竞态/避障) |
+| `await fsm.wait_any("A", "B", timeout=...)` | 等待任意一个事件到达 |
 | `await fsm.wait_all("A", "B", timeout=...)` | 并行等待所有事件全部到达 |
 | `fsm.post_event("NAME", success=..., data=...)` | 线程安全地从任意线程投递事件 |
 | `await act.retry_until_ack(...)` | 下位机可靠性重发机制 (自动超时重试) |
@@ -128,7 +128,7 @@ python tests/run_all_tests.py
 ## 环境依赖与安装 (Requirements & Installation)
 
 ### 1. 基础环境
-- **Python**: `>= 3.8` (核心调度引擎基于 Python 原生 `asyncio`，无强制第三方依赖)
+- **Python**: `>= 3.8` (核心调度引擎基于 Python 原生asyncio，无强制第三方依赖)
 - **操作系统**: Linux (Ubuntu 22.04 / 24.04 推荐) / Windows 10/11 / macOS
 
 ### 2. ROS 2 环境 (真车运行与驱动支持)

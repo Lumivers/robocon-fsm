@@ -13,15 +13,15 @@ standard_robot/
 └── main_node.py           # ROS2 节点入口（参数加载、Topic 绑定、启动决策）
 ```
 
-## 三步开发指南
+## 开发指南
 
-1. **Step 1: 在 `my_actions.py` 中定义你机器人的硬件动作**
+1. 在 `my_actions.py` 中定义你机器人的硬件动作
    - 比如 `send_navigate(x, y)`、`send_gripper_command(cmd)`。
    - 在 Topic 回调中通过 `self.post_event("YOUR_EVENT_NAME")` 告知状态机动作已完成。
 
-2. **Step 2: 在 `my_decision.py` 中编排全场决策流程**
+2. 在 `my_decision.py` 中编排全场决策流程
    - 通过 `await fsm.wait_event("...")`、`await fsm.wait(...)` 组织战术。
    - 所有逻辑从上往下线性执行，调试和排查一目了然。
 
-3. **Step 3: 在 `main_node.py` 中注册 Topic 并启动**
-   - 继承 `Ros2DecisionNodeBase`，框架会自动搞定多线程执行器与 asyncio 事件循环的安全调度！
+3. 在 `main_node.py` 中注册 Topic 并启动
+   - 继承 `Ros2DecisionNodeBase`，框架会自动搞定多线程执行器与 asyncio 事件循环的安全调度

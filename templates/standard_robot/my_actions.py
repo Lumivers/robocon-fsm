@@ -12,14 +12,14 @@ from geometry_msgs.msg import PoseStamped
 
 class MyRobotActions(Ros2ActionDispatcher):
     """
-    本车专属动作分发器.
+    动作分发器.
     继承自 Ros2ActionDispatcher，自动具备 cmd_vel 发布与 FSM 事件绑定能力。
     """
 
     def __init__(self, node=None):
         super().__init__(node=node)
 
-        # 1. 注册本车专属的 ROS2 Publisher
+        # 1. 注册ROS2 Publisher
         if self.node is not None:
             self.pub_nav_goal = self.node.create_publisher(PoseStamped, "/goal_pose", 10)
             self.pub_gripper = self.node.create_publisher(UInt8, "/robot/gripper_cmd", 10)

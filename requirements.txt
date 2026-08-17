@@ -1,0 +1,8 @@
+# Python 核心依赖 (Python 3.8+ 内置 asyncio，无需额外安装)
+
+# 测试与代码质量 (可选)
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+
+# 纯 Python 串口通信 (可选，用于脱离 ROS 2 直连串口时)
+pyserial>=3.5

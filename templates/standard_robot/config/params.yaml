@@ -1,0 +1,13 @@
+# 机器人运行参数配置示例
+decision_node:
+  ros__parameters:
+    is_red_side: true
+    max_match_time_s: 180.0
+    
+    # 关键坐标点
+    start_pos_x: 0.5
+    start_pos_y: 0.5
+    loading_pos_x: 2.0
+    loading_pos_y: 1.0
+    scoring_pos_x: 4.0
+    scoring_pos_y: 2.5

@@ -1,0 +1,9 @@
+/**:
+  ros__parameters:
+    device_name: "/dev/ttyUSB0"
+    baud_rate: 115200
+    flow_control: "none"
+    parity: "none"
+    stop_bits: "1"
+    odom_offset_x: 0.0
+    odom_offset_y: 0.0

@@ -95,3 +95,7 @@ class MockActionDispatcher(ActionDispatcher):
         if self.fsm is not None:
             loop = self.fsm.get_loop()
             asyncio.run_coroutine_threadsafe(_finish(), loop)
+
+    def emergency_stop(self) -> None:
+        """模拟急停调用."""
+        self._record("emergency_stop")

@@ -39,6 +39,13 @@ class MyRobotDecisionNode(Ros2DecisionNodeBase):
             self.actions.on_gripper_status_callback,
             10
         )
+        # 赛场一键重试复位话题 (操作手按键或外部触发)
+        self.create_subscription(
+            Bool,
+            "/competition/reset",
+            lambda msg: self.reset_mission() if msg.data else None,
+            10
+        )
 
     def _load_parameters(self):
         """声明与加载参数."""

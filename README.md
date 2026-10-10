@@ -120,7 +120,9 @@ python tests/run_all_tests.py
 | `await fsm.wait_any("A", "B", timeout=...)` | 等待任意一个事件到达 |
 | `await fsm.wait_all("A", "B", timeout=...)` | 并行等待所有事件全部到达 |
 | `fsm.post_event("NAME", success=..., data=...)` | 线程安全地从任意线程投递事件 |
-| `await act.retry_until_ack(...)` | 下位机可靠性重发机制 (自动超时重试) |
+| `fsm.has_event("NAME", within_seconds=...)` | 轻量查询历史事件（如电机是否报警、传感器是否校准） |
+| `await act.retry_until_ack(...)` | 下位机可靠性重发机制 (先挂号后发指令，防丢包自愈) |
+| `node.reset_mission()` | 赛场免杀进程热重置 (急停切断+清空状态机+重跑任务) |
 | `bb = Blackboard()` | 全局黑板，跨模块共享红蓝方/比赛得分等状态 |
 
 ---

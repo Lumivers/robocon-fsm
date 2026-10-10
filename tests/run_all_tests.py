@@ -181,6 +181,76 @@ class TestRoboconFSM(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(bb.score, 10)
         self.assertEqual(bb.get("target_pos"), (1.0, 2.0))
 
+    async def test_retry_until_ack_instant_response(self):
+        """
+        【测试 8】零延时快速回包时序防丢测试:
+        验证当 send_fn 内部以同步方式瞬间触发 post_event 时，
+        由于采用了“先预挂号再发送”机制，状态机依然能百分之百捕获该 ACK，防止时序竞态丢事件。
+        """
+        fsm = FSM()
+        fsm.set_loop(asyncio.get_running_loop())
+        mock_act = MockActionDispatcher(fsm=fsm, auto_ack=False)
+
+        # 模拟超快硬件/同线程瞬间回复 ACK
+        def instant_send():
+            fsm.post_event("ACK", command=0x07)
+
+        ev = await mock_act.retry_until_ack(
+            send_fn=instant_send,
+            ack_matcher=lambda e: e.type == "ACK" and e.command == 0x07,
+            timeout=0.05,
+            max_retries=1,
+        )
+        self.assertEqual(ev.type, "ACK")
+        self.assertEqual(ev.command, 0x07)
+
+    async def test_fsm_timeout_diagnostics(self):
+        """
+        【测试 9】超时异常上下文增强测试:
+        验证发生超时异常时，报错信息中能够自动附带最近收到的事件列表，辅助赛场精准排错。
+        """
+        fsm = FSM()
+        fsm.set_loop(asyncio.get_running_loop())
+
+        # 先投递两个事件
+        fsm.post_event("BATTERY_OK")
+        fsm.post_event("LIDAR_WARN")
+
+        try:
+            await fsm.wait_event("NEVER_HAPPEN", timeout=0.02)
+            self.fail("Expected FSMTimeoutError")
+        except FSMTimeoutError as err:
+            err_msg = str(err)
+            self.assertIn("Recent events on bus", err_msg)
+            self.assertIn("LIDAR_WARN", err_msg)
+
+    def test_fsm_history_queries(self):
+        """
+        【测试 10】事件历史轻量检索 (has_event / get_recent_events):
+        验证能否准确根据时间范围或事件名称检索历史事件。
+        """
+        fsm = FSM()
+        fsm.post_event("START_CALIBRATE")
+        fsm.post_event("MOTOR_OVERHEAT")
+
+        self.assertTrue(fsm.has_event("MOTOR_OVERHEAT"))
+        self.assertTrue(fsm.has_event("MOTOR_OVERHEAT", within_seconds=5.0))
+        self.assertFalse(fsm.has_event("NON_EXISTING"))
+
+        recent = fsm.get_recent_events(limit=2)
+        self.assertEqual(len(recent), 2)
+        self.assertEqual(recent[-1].type, "MOTOR_OVERHEAT")
+
+    def test_mock_emergency_stop(self):
+        """
+        【测试 11】急停调用记录:
+        验证调用 mock_act.emergency_stop() 能正确记录到历史调用日志。
+        """
+        mock_act = MockActionDispatcher()
+        mock_act.emergency_stop()
+        self.assertEqual(len(mock_act.history), 1)
+        self.assertEqual(mock_act.history[0][0], "emergency_stop")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -51,6 +51,7 @@ class Ros2DecisionNodeBase(Node if HAS_RCLPY else object):
         self._loop = asyncio.new_event_loop()
         self.fsm.set_loop(self._loop)
         self._decision_thread: Optional[threading.Thread] = None
+        self._current_task: Optional[asyncio.Task] = None
         self._is_running = True
 
         self.get_logger().info(f"[{node_name}] Initialized. Preparing decision subsystem.")
@@ -68,17 +69,47 @@ class Ros2DecisionNodeBase(Node if HAS_RCLPY else object):
         def _run_loop():
             asyncio.set_event_loop(self._loop)
             self.get_logger().info("Asyncio decision loop started.")
+            self._current_task = self._loop.create_task(self._safe_run_mission())
             try:
-                self._loop.run_until_complete(self.run_mission())
-            except asyncio.CancelledError:
-                self.get_logger().info("Decision mission cancelled.")
+                self._loop.run_forever()
             except Exception as e:
-                self.get_logger().error(f"Unhandled exception in decision mission: {e}", exc_info=True)
+                self.get_logger().error(f"Event loop terminated unexpectedly: {e}", exc_info=True)
             finally:
-                self.get_logger().info("Decision mission ended.")
+                self.get_logger().info("Decision mission loop stopped.")
 
         self._decision_thread = threading.Thread(target=_run_loop, daemon=True, name="DecisionWorker")
         self._decision_thread.start()
+
+    async def _safe_run_mission(self) -> None:
+        """安全包裹的主决策协程，处理异常与取消."""
+        try:
+            self.get_logger().info("Decision mission started.")
+            await self.run_mission()
+            self.get_logger().info("Decision mission completed successfully.")
+        except asyncio.CancelledError:
+            self.get_logger().info("Decision mission was cancelled.")
+        except Exception as e:
+            self.get_logger().error(f"Unhandled exception in decision mission: {e}", exc_info=True)
+
+    def reset_mission(self) -> None:
+        """
+        赛场免杀进程热重置:
+        1. 立即调用动作器急停切断 (act.emergency_stop())
+        2. 清除当前状态机挂起的 Future (fsm.clear())
+        3. 取消正在执行的旧任务并在同一个事件循环中重新拉起 run_mission()
+        """
+        self.get_logger().warn(">>> [RESET] Triggering mission hot reset without killing ROS 2 process...")
+        if self.act is not None:
+            self.act.emergency_stop()
+
+        def _do_reset():
+            self.fsm.clear()
+            if self._current_task and not self._current_task.done():
+                self._current_task.cancel()
+            self._current_task = self._loop.create_task(self._safe_run_mission())
+
+        if self._loop.is_running():
+            self._loop.call_soon_threadsafe(_do_reset)
 
     async def run_mission(self) -> None:
         """
@@ -90,8 +121,12 @@ class Ros2DecisionNodeBase(Node if HAS_RCLPY else object):
         """清理并优雅终止节点."""
         self._is_running = False
         if self._loop.is_running():
-            self._loop.call_soon_threadsafe(self.fsm.clear)
-            self._loop.call_soon_threadsafe(self._loop.stop)
+            def _shutdown():
+                if self._current_task and not self._current_task.done():
+                    self._current_task.cancel()
+                self.fsm.clear()
+                self._loop.stop()
+            self._loop.call_soon_threadsafe(_shutdown)
         super().destroy_node()
 
 

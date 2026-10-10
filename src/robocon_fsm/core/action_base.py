@@ -80,9 +80,11 @@ class ActionDispatcher(ABC):
 
         last_error = None
         for attempt in range(1, max_retries + 1):
-            send_fn()
+            # 先挂号：在发送物理指令之前预注册 waiter，防止下位机快速回包时的时序竞态
+            fut = self.fsm.create_waiter(ack_matcher)
             try:
-                event = await self.fsm.wait_event(ack_matcher, timeout=timeout)
+                send_fn()
+                event = await self.fsm.wait_future(ack_matcher, fut, timeout=timeout)
                 return event
             except FSMTimeoutError as err:
                 last_error = err
@@ -92,6 +94,9 @@ class ActionDispatcher(ABC):
                 )
                 if interval > 0:
                     await asyncio.sleep(interval)
+            except Exception:
+                self.fsm.cancel_waiter(fut)
+                raise
 
         raise FSMTimeoutError(
             f"Failed to receive ACK for '{ack_matcher}' after {max_retries} attempts."

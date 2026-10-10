@@ -6,6 +6,7 @@ FSM — 异步状态机调度引擎
 
 import asyncio
 import logging
+import time
 from typing import Any, Callable, Coroutine, List, Optional, Tuple, Union
 
 from .event import Event, EventMatcher, match_event
@@ -72,7 +73,14 @@ class FSM:
             ev = event
 
         if self._loop is None:
-            log.warning("post_event(%s) dropped: event loop not set", ev.type)
+            try:
+                self._loop = asyncio.get_running_loop()
+            except RuntimeError:
+                pass
+
+        if self._loop is None:
+            # 未绑定事件循环时直接同步分发（确保记录历史与触发监听）
+            self._dispatch_event(ev)
             return
 
         if self._loop.is_closed():
@@ -144,10 +152,76 @@ class FSM:
                 return await fut
         except asyncio.TimeoutError:
             matcher_name = matcher if isinstance(matcher, str) else getattr(matcher, "__name__", "predicate")
-            raise FSMTimeoutError(f"Timed out waiting for event '{matcher_name}' after {timeout}s")
+            recent_str = self._get_recent_events_str()
+            raise FSMTimeoutError(f"Timed out waiting for event '{matcher_name}' after {timeout}s.{recent_str}")
         finally:
             # 清理 waiter
             self._waiters = [item for item in self._waiters if item[1] is not fut]
+
+    def create_waiter(self, matcher: EventMatcher) -> asyncio.Future:
+        """
+        预先注册一个事件匹配器并返回对应的 Future。
+
+        常用于“先挂号，后发指令”模式，防止下位机快速回包导致的事件丢失。
+        """
+        loop = self.get_loop()
+        fut = loop.create_future()
+        self._waiters.append((matcher, fut))
+        return fut
+
+    def cancel_waiter(self, fut: asyncio.Future) -> None:
+        """取消并移除指定的预注册 waiter."""
+        self._waiters = [item for item in self._waiters if item[1] is not fut]
+        if not fut.done():
+            fut.cancel()
+
+    async def wait_future(
+        self,
+        matcher: EventMatcher,
+        fut: asyncio.Future,
+        timeout: Optional[float] = None
+    ) -> Event:
+        """
+        等待预先通过 create_waiter 注册的 Future，支持超时保护并自动清理。
+        """
+        try:
+            if timeout is not None:
+                return await asyncio.wait_for(fut, timeout=timeout)
+            else:
+                return await fut
+        except asyncio.TimeoutError:
+            matcher_name = matcher if isinstance(matcher, str) else getattr(matcher, "__name__", "predicate")
+            recent_str = self._get_recent_events_str()
+            raise FSMTimeoutError(f"Timed out waiting for event '{matcher_name}' after {timeout}s.{recent_str}")
+        finally:
+            self._waiters = [item for item in self._waiters if item[1] is not fut]
+
+    def _get_recent_events_str(self, limit: int = 3) -> str:
+        """获取最近事件摘要字符串，用于超时异常上下文增强."""
+        if not self._event_history:
+            return ""
+        recent = [e.type for e in self._event_history[-limit:]]
+        return f" Recent events on bus: {recent}"
+
+    def get_recent_events(self, limit: int = 10) -> List[Event]:
+        """获取最近收到的事件列表（默认最多 10 条）."""
+        return list(self._event_history[-limit:])
+
+    def has_event(self, matcher: EventMatcher, within_seconds: Optional[float] = None) -> bool:
+        """
+        检查历史记录中是否存在匹配的事件。
+
+        Args:
+            matcher: 事件类型字符串或谓词函数
+            within_seconds: 仅检索最近 N 秒内发生的事件。None 表示检索全部历史。
+        """
+        now = time.time()
+        for ev in reversed(self._event_history):
+            if within_seconds is not None and (now - ev.timestamp) > within_seconds:
+                break
+            if match_event(matcher, ev):
+                return True
+        return False
 
     async def wait_any(
         self,
@@ -192,7 +266,8 @@ class FSM:
                 return await composite_fut
         except asyncio.TimeoutError:
             names = [m if isinstance(m, str) else "predicate" for m in matchers]
-            raise FSMTimeoutError(f"Timed out in wait_any({names}) after {timeout}s")
+            recent_str = self._get_recent_events_str()
+            raise FSMTimeoutError(f"Timed out in wait_any({names}) after {timeout}s.{recent_str}")
         finally:
             # 清理所有子 waiter
             sub_futs = {item[1] for item in sub_waiters}
@@ -227,7 +302,8 @@ class FSM:
                 return await asyncio.gather(*coros)
         except asyncio.TimeoutError:
             names = [m if isinstance(m, str) else "predicate" for m in matchers]
-            raise FSMTimeoutError(f"Timed out in wait_all({names}) after {timeout}s")
+            recent_str = self._get_recent_events_str()
+            raise FSMTimeoutError(f"Timed out in wait_all({names}) after {timeout}s.{recent_str}")
 
     async def race(
         self,
